@@ -2,27 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>An Anniversary Quest</title>
-
     <link
       href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;700&display=swap"
       rel="stylesheet"
     />
-
     <style>
       :root {
         --bg: #282828;
         --fg: #ebdbb2;
         --yellow: #d79921;
-        --box-bg: rgba(60, 56, 54, 0.98);
       }
-
       body {
         background-image: url("background.jpg");
         background-size: cover;
         background-position: center;
-        background-repeat: no-repeat;
         background-color: var(--bg);
         color: var(--fg);
         margin: 0;
@@ -33,7 +31,6 @@
         overflow: hidden;
         font-family: "Fira Mono", monospace;
       }
-
       #gameContainer {
         position: relative;
         width: 960px;
@@ -44,7 +41,6 @@
         overflow: hidden;
         background: #000;
       }
-
       #rpgCanvas {
         position: absolute;
         top: 0;
@@ -55,22 +51,37 @@
         cursor: pointer;
         z-index: 10;
       }
-
-      /* --- CENTERED SPRITE SETUP --- */
       #characterSprite {
         position: absolute;
         bottom: 160px;
-        left: 50%; /* Move to center */
-        transform: translateX(-50%); /* Offset by half its own width */
+        left: 50%;
+        transform: translateX(-50%);
         width: auto;
         max-height: 220px;
         z-index: 5;
         animation: bob 3s ease-in-out infinite;
         image-rendering: pixelated;
         pointer-events: none;
-        transition: opacity 0.3s ease;
       }
-
+      #letterOverlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 70%;
+        height: 60%;
+        background: #fdf6e3;
+        color: #5c4033;
+        padding: 40px;
+        border-radius: 2px;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+        display: none;
+        z-index: 100;
+        font-family: "Georgia", serif;
+        line-height: 1.6;
+        border: 8px double #d5c4a1;
+        overflow-y: auto;
+      }
       @keyframes bob {
         0%,
         100% {
@@ -85,22 +96,37 @@
   <body>
     <div id="gameContainer">
       <img id="characterSprite" src="character.jpg" alt="Snorlax" />
+      <div id="letterOverlay">
+        <h2 style="text-align: center; margin-top: 0">The Monthsary Letter</h2>
+        <p>Dearest [Name],</p>
+        <p>
+          Just like this Snorlax, I can be a bit stubborn and sleepy sometimes,
+          but you always know exactly what I need to keep going.
+        </p>
+        <p>
+          Happy Anniversary! Thank you for always playing the flute to wake me
+          up and for having the right berries to make everything better. I'm so
+          lucky to have you as my Player 2.
+        </p>
+        <p style="text-align: right; margin-top: 40px">
+          Forever yours,<br />Rish
+        </p>
+      </div>
       <canvas id="rpgCanvas" width="960" height="540"></canvas>
     </div>
 
     <script>
       const canvas = document.getElementById("rpgCanvas");
       const realCtx = canvas.getContext("2d");
-      realCtx.imageRendering = "pixelated";
-
       const colors = {
-        boxBg: "rgba(60, 56, 54, 0.98)",
+        boxBg: "rgba(30, 30, 30, 0.98)",
         boxBorder: "#fabd2f",
         text: "#ebdbb2",
         arrow: "#fabd2f",
+        hpGreen: "#40d040",
       };
 
-      const dialogMessages = [
+      const mainMessages = [
         "A Pokémon is sprawled out in a deep and comfortable slumber.",
         "Want to use the POKé FLUTE?",
         "Rish played the POKé FLUTE.",
@@ -108,204 +134,327 @@
         "It attacked in a grumpy rage!",
       ];
 
-      // ENGINE STATE
+      const noLoopMessages = [
+        "Are you sure?",
+        "But hes cute",
+        "Are you just going to leave him there?",
+        "Really",
+        "Reaaaaaaaaaaaaaaaaaally sure?",
+        "Aw :(",
+      ];
+      const snorlaxPassiveDialogues = [
+        "SNORLAX doesn't seem interested in battling.",
+        "SNORLAX seems to be hungry.",
+        "SNORLAX wants to go back to its slumber.",
+        "SNORLAX's stomach is growling...",
+      ];
+
       let currentMessageIndex = 0;
       let visibleChars = 0;
       let isTyping = false;
-      const typingSpeed = 45;
-      let dialogBoxAlpha = 0;
-      let frameCount = 0;
-
-      // INTERACTION STATE
+      let noCount = -1;
+      let isNoLoop = false;
       let showYesNo = false;
-      let selectedOption = 0;
+      let showBattleMenu = false;
+      let showMoveMenu = false;
+      let showBagMenu = false;
+      let battleMessageActive = false;
+      let battleMessageQueue = [];
       let interactionComplete = false;
+      let dialogBoxAlpha = 0;
+      let forceSleepSprite = false;
+      let snorlaxExists = true;
+      let showingLetterSprite = false;
+      let letterOverlayVisible = false;
+      let waitingToStartBattle = false;
 
-      // MENU GEOMETRY
-      const menuWidth = 160;
-      const menuHeight = 110;
-      const menuX = 760;
-      const menuY = 240;
+      let snorlaxHP = 100;
+      let targetHP = 100;
+
+      const typingSpeed = 35;
+      const margin = 20;
+      const bY = 380;
+      const bH = 140;
+
+      const letterImg = new Image();
+      letterImg.src = "letter.png";
 
       function updateCharacterSprite() {
         const sprite = document.getElementById("characterSprite");
-        if (currentMessageIndex >= 3) {
-          if (sprite.src.indexOf("character1.jpg") === -1) {
-            sprite.src = "character1.jpg";
-          }
-        } else {
-          if (sprite.src.indexOf("character.jpg") === -1) {
-            sprite.src = "character.jpg";
-          }
+        if (!snorlaxExists) {
+          sprite.style.display = "none";
+          return;
         }
+        sprite.src =
+          forceSleepSprite || (currentMessageIndex < 3 && !waitingToStartBattle)
+            ? "character.jpg"
+            : "character1.jpg";
+      }
+
+      function drawHPBar() {
+        if (!showBattleMenu || !snorlaxExists || letterOverlayVisible) return;
+        const x = 50,
+          y = 50,
+          w = 300,
+          h = 80;
+        realCtx.fillStyle = colors.boxBg;
+        realCtx.fillRect(x, y, w, h);
+        realCtx.strokeStyle = colors.boxBorder;
+        realCtx.lineWidth = 3;
+        realCtx.strokeRect(x, y, w, h);
+        realCtx.fillStyle = colors.text;
+        realCtx.font = "bold 22px 'Fira Mono', monospace";
+        realCtx.fillText("SNORLAX", x + 15, y + 30);
+        realCtx.fillText("Lv30", x + 230, y + 30);
+        realCtx.fillStyle = "#555";
+        realCtx.fillRect(x + 80, y + 50, 200, 15);
+        if (snorlaxHP > targetHP) snorlaxHP -= 0.5;
+        if (snorlaxHP < targetHP) snorlaxHP += 0.5;
+        const hpW = Math.max(0, Math.min(200, (snorlaxHP / 100) * 200));
+        realCtx.fillStyle = colors.hpGreen;
+        realCtx.fillRect(x + 80, y + 50, hpW, 15);
       }
 
       function drawDialogueBox() {
-        const margin = 20;
-        const h = 140;
+        if (letterOverlayVisible) return;
+        const h = 140,
+          w = canvas.width - margin * 2;
         const y = canvas.height - h - margin;
-        const w = canvas.width - margin * 2;
-
         realCtx.globalAlpha = dialogBoxAlpha;
         realCtx.fillStyle = colors.boxBg;
         realCtx.fillRect(margin, y, w, h);
         realCtx.strokeStyle = colors.boxBorder;
         realCtx.lineWidth = 4;
         realCtx.strokeRect(margin + 2, y + 2, w - 4, h - 4);
-
-        realCtx.fillStyle = colors.boxBorder;
-        const cS = 8;
-        realCtx.fillRect(margin - 4, y - 4, cS, cS);
-        realCtx.fillRect(margin + w - 4, y - 4, cS, cS);
-        realCtx.fillRect(margin - 4, y + h - 4, cS, cS);
-        realCtx.fillRect(margin + w - 4, y + h - 4, cS, cS);
         realCtx.globalAlpha = 1.0;
       }
 
-      function drawYesNoMenu() {
-        if (!showYesNo) return;
-
+      function drawBattleMenu() {
+        if (!showBattleMenu || letterOverlayVisible) return;
+        const boxW = canvas.width - margin * 2;
         realCtx.fillStyle = colors.boxBg;
-        realCtx.fillRect(menuX, menuY, menuWidth, menuHeight);
+        realCtx.fillRect(margin, bY, boxW, bH);
         realCtx.strokeStyle = colors.boxBorder;
-        realCtx.lineWidth = 3;
-        realCtx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+        realCtx.strokeRect(margin + 2, bY + 2, boxW - 4, bH - 4);
 
-        realCtx.fillStyle = colors.text;
-        realCtx.font = "bold 24px 'Fira Mono', monospace";
-
-        const textX = menuX + 45;
-        const yesY = menuY + 45;
-        const noY = menuY + 90;
-
-        realCtx.fillText("YES", textX, yesY);
-        realCtx.fillText("NO", textX, noY);
-
-        realCtx.fillStyle = colors.arrow;
-        const cursorY = selectedOption === 0 ? yesY : noY;
-        realCtx.fillText("▶", menuX + 15, cursorY);
-      }
-
-      function drawText() {
-        if (dialogBoxAlpha < 1) return;
-
-        const margin = 20;
-        const borderPadding = 50;
-        const textY = canvas.height - 140 - margin + 55;
-        const maxWidth = canvas.width - margin * 2 - borderPadding * 2;
-        const startX = margin + borderPadding;
-
-        const currentFullMessage = dialogMessages[currentMessageIndex];
-        realCtx.font = "22px 'Fira Mono', monospace";
-        realCtx.fillStyle = colors.text;
-
-        const currentFullText = currentFullMessage.substring(0, visibleChars);
-        const words = currentFullText.split(" ");
-        let lines = [];
-        let currentLine = "";
-
-        for (let n = 0; n < words.length; n++) {
-          let testLine = currentLine + words[n] + " ";
-          if (realCtx.measureText(testLine).width > maxWidth && n > 0) {
-            lines.push(currentLine);
-            currentLine = words[n] + " ";
-          } else {
-            currentLine = testLine;
-          }
-        }
-        lines.push(currentLine);
-
-        lines.forEach((line, i) => {
-          realCtx.fillText(line, startX, textY + i * 35);
-        });
-
-        if (!showYesNo && !isTyping && frameCount % 60 < 30) {
-          const arrowX = canvas.width - 60;
-          const arrowY = canvas.height - 50;
+        if (battleMessageActive) {
+          realCtx.fillStyle = colors.text;
+          realCtx.font = "24px 'Fira Mono', monospace";
+          realCtx.fillText(
+            battleMessageQueue[0].substring(0, visibleChars),
+            margin + 50,
+            bY + 80,
+          );
+        } else if (showMoveMenu) {
+          realCtx.fillStyle = colors.text;
+          realCtx.font = "bold 28px 'Fira Mono', monospace";
+          realCtx.fillText("TACKLE", margin + 60, bY + 80);
           realCtx.fillStyle = colors.arrow;
-          realCtx.beginPath();
-          realCtx.moveTo(arrowX, arrowY);
-          realCtx.lineTo(arrowX - 18, arrowY);
-          realCtx.lineTo(arrowX - 9, arrowY + 12);
-          realCtx.fill();
+          realCtx.fillText("▶", margin + 25, bY + 80);
+        } else if (showBagMenu) {
+          realCtx.fillStyle = colors.text;
+          realCtx.font = "bold 28px 'Fira Mono', monospace";
+          realCtx.fillText("SITRUS BERRY", margin + 60, bY + 80);
+          realCtx.fillText("CANCEL", margin + 450, bY + 80);
+          realCtx.fillStyle = colors.arrow;
+          realCtx.fillText("▶", margin + 25, bY + 80);
+        } else {
+          realCtx.fillStyle = colors.text;
+          realCtx.font = "bold 28px 'Fira Mono', monospace";
+          realCtx.fillText("What will YOU do?", margin + 50, bY + 80);
+          realCtx.fillText("FIGHT", 650, bY + 55);
+          realCtx.fillText("BAG", 820, bY + 55);
+          realCtx.fillText("POKéMON", 650, bY + 105);
+          realCtx.fillText("RUN", 820, bY + 105);
         }
       }
 
       function gameLoop() {
-        frameCount++;
         if (dialogBoxAlpha < 1) dialogBoxAlpha += 0.05;
-
         updateCharacterSprite();
 
-        const currentFullMessage = dialogMessages[currentMessageIndex];
-        if (visibleChars < currentFullMessage.length) {
-          if (!isTyping) {
-            isTyping = true;
-            setTimeout(typeWriterCore, typingSpeed);
-          }
-        } else {
-          isTyping = false;
-          if (currentMessageIndex === 1 && !interactionComplete) {
-            showYesNo = true;
-          }
+        let msg = battleMessageActive
+          ? battleMessageQueue[0]
+          : isNoLoop
+            ? noLoopMessages[noCount]
+            : mainMessages[currentMessageIndex];
+        if (!msg) msg = "";
+
+        if (!letterOverlayVisible && visibleChars < msg.length && !isTyping) {
+          isTyping = true;
+          setTimeout(() => {
+            visibleChars++;
+            isTyping = false;
+          }, typingSpeed);
         }
 
         realCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (showingLetterSprite && !letterOverlayVisible) {
+          const imgW = 120,
+            imgH = 120;
+          const imgX = (canvas.width - imgW) / 2;
+          const imgY = 220;
+          realCtx.imageSmoothingEnabled = false;
+          realCtx.drawImage(letterImg, imgX, imgY, imgW, imgH);
+        }
+
         drawDialogueBox();
-        drawText();
-        drawYesNoMenu();
+
+        if (!showBattleMenu && !letterOverlayVisible) {
+          realCtx.font = "22px 'Fira Mono', monospace";
+          realCtx.fillStyle = colors.text;
+          realCtx.fillText(
+            msg.substring(0, visibleChars),
+            70,
+            canvas.height - 105,
+          );
+        }
+
+        if (showYesNo && !letterOverlayVisible) {
+          realCtx.fillStyle = colors.boxBg;
+          realCtx.fillRect(760, 240, 160, 110);
+          realCtx.strokeStyle = colors.boxBorder;
+          realCtx.strokeRect(760, 240, 160, 110);
+          realCtx.fillStyle = colors.text;
+          realCtx.font = "bold 24px 'Fira Mono', monospace";
+          realCtx.fillText("YES", 805, 285);
+          realCtx.fillText("NO", 805, 330);
+          realCtx.fillStyle = colors.arrow;
+          realCtx.fillText("▶", 775, 285);
+        }
+
+        drawBattleMenu();
+        drawHPBar();
         requestAnimationFrame(gameLoop);
       }
 
-      function typeWriterCore() {
-        if (visibleChars < dialogMessages[currentMessageIndex].length) {
-          visibleChars++;
-          setTimeout(typeWriterCore, typingSpeed);
-        } else {
-          isTyping = false;
-        }
-      }
-
       function handleInput(e) {
-        e.preventDefault();
-
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const mouseX = (e.clientX - rect.left) * scaleX;
-        const mouseY = (e.clientY - rect.top) * scaleY;
-
+        const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
         if (isTyping) {
-          visibleChars = dialogMessages[currentMessageIndex].length;
+          visibleChars = 999;
           return;
         }
 
-        if (showYesNo) {
-          if (mouseX >= menuX && mouseX <= menuX + menuWidth) {
-            if (mouseY >= menuY && mouseY < menuY + menuHeight / 2) {
-              showYesNo = false;
-              interactionComplete = true;
-              currentMessageIndex++;
-              visibleChars = 0;
-            } else if (
-              mouseY >= menuY + menuHeight / 2 &&
-              mouseY <= menuY + menuHeight
-            ) {
-              showYesNo = false;
-              currentMessageIndex = 0;
-              interactionComplete = false;
-              visibleChars = 0;
+        if (battleMessageActive) {
+          if (battleMessageQueue[0] === "SNORLAX used rest.") targetHP = 100;
+          if (battleMessageQueue[0] === "SNORLAX wandered off!")
+            snorlaxExists = false;
+          if (battleMessageQueue[0] === "SNORLAX dropped a letter.")
+            showingLetterSprite = true;
+          if (battleMessageQueue[0] === "Rish opened the Monthsary Letter.") {
+            showingLetterSprite = false;
+            letterOverlayVisible = true;
+            document.getElementById("letterOverlay").style.display = "block";
+          }
+
+          battleMessageQueue.shift();
+          visibleChars = 0;
+          if (battleMessageQueue.length > 0) {
+            if (battleMessageQueue[0].includes("slumber"))
+              forceSleepSprite = true;
+          } else {
+            battleMessageActive = false;
+            if (!letterOverlayVisible) {
+              showMoveMenu = false;
+              showBagMenu = false;
             }
           }
           return;
         }
 
-        currentMessageIndex = (currentMessageIndex + 1) % dialogMessages.length;
-        if (currentMessageIndex === 0) interactionComplete = false;
-        visibleChars = 0;
+        if (showBattleMenu && !letterOverlayVisible) {
+          if (!showMoveMenu && !showBagMenu) {
+            if (
+              mouseX >= 615 &&
+              mouseX <= 750 &&
+              mouseY >= bY &&
+              mouseY <= bY + 70
+            )
+              showMoveMenu = true;
+            if (mouseX >= 800 && mouseY >= bY && mouseY <= bY + 70)
+              showBagMenu = true;
+            return;
+          }
+          if (showMoveMenu && mouseX >= margin && mouseX <= margin + 250) {
+            targetHP = Math.max(0, targetHP - 10);
+            let selectedD =
+              targetHP <= 10
+                ? "SNORLAX wants to go back to its slumber."
+                : snorlaxPassiveDialogues[
+                    Math.floor(Math.random() * snorlaxPassiveDialogues.length)
+                  ];
+            battleMessageQueue = ["Rish used Tackle!", selectedD];
+            if (selectedD.includes("slumber")) {
+              battleMessageQueue.push("SNORLAX used rest.");
+            } else {
+              forceSleepSprite = false;
+            }
+            battleMessageActive = true;
+            visibleChars = 0;
+          }
+          if (showBagMenu && mouseX >= margin && mouseX <= margin + 250) {
+            battleMessageQueue = [
+              "Rish used the Sitrus Berry.",
+              "SNORLAX's HP was restored!",
+              "SNORLAX was cured out of its hunger.",
+              "SNORLAX wandered off!",
+              "SNORLAX dropped a letter.",
+              "Rish obtained Monthsary Letter!",
+              "Rish opened the Monthsary Letter.",
+            ];
+            battleMessageActive = true;
+            visibleChars = 0;
+          } else if (showBagMenu && mouseX >= 400) {
+            showBagMenu = false;
+          }
+          return;
+        }
+
+        if (showYesNo && !letterOverlayVisible) {
+          if (mouseY < 290) {
+            showYesNo = false;
+            isNoLoop = false;
+            interactionComplete = true;
+            currentMessageIndex = 2;
+          } else {
+            showYesNo = false;
+            noCount++;
+            if (noCount >= noLoopMessages.length) {
+              isNoLoop = false;
+              currentMessageIndex = 3;
+            } else {
+              isNoLoop = true;
+            }
+          }
+          visibleChars = 0;
+          return;
+        }
+
+        if (
+          currentMessageIndex === mainMessages.length - 1 &&
+          !waitingToStartBattle
+        ) {
+          waitingToStartBattle = true;
+          return;
+        }
+
+        if (waitingToStartBattle) {
+          showBattleMenu = true;
+          waitingToStartBattle = false;
+          visibleChars = 0;
+          return;
+        }
+
+        if (currentMessageIndex < mainMessages.length - 1) {
+          currentMessageIndex++;
+          visibleChars = 0;
+        }
       }
 
-      canvas.addEventListener("click", handleInput);
+      canvas.addEventListener("mousedown", handleInput);
       window.onload = gameLoop;
     </script>
   </body>
