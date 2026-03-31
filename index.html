@@ -128,8 +128,21 @@
 
       // Audio Setup
       const bgMusic = new Audio("Main.mp3");
+      const battleMusic = new Audio("Battle.mp3");
+      const hitSFX = new Audio("Hit.mp3");
+      const clickSFX = new Audio("Click.mp3");
+
+      // Music stays at full volume (1.0)
+      bgMusic.volume = 1.0;
+      battleMusic.volume = 1.0;
+      // Clicks and Hits are now silent/subtle (0.15)
+      hitSFX.volume = 0.15;
+      clickSFX.volume = 0.15;
+
       bgMusic.loop = true;
+      battleMusic.loop = true;
       let audioStarted = false;
+      let battleMusicStarted = false;
 
       const mainMessages = [
         "A Pokémon is sprawled out in a deep and comfortable slumber.",
@@ -173,6 +186,9 @@
       let letterOverlayVisible = false;
       let waitingToStartBattle = false;
 
+      let encounterAnimation = false;
+      let encounterTimer = 0;
+
       let snorlaxHP = 100;
       let targetHP = 100;
 
@@ -183,6 +199,11 @@
 
       const letterImg = new Image();
       letterImg.src = "letter.png";
+
+      function playClick() {
+        clickSFX.currentTime = 0;
+        clickSFX.play().catch((e) => {});
+      }
 
       function updateCharacterSprite() {
         const sprite = document.getElementById("characterSprite");
@@ -221,7 +242,7 @@
       }
 
       function drawDialogueBox() {
-        if (letterOverlayVisible) return;
+        if (letterOverlayVisible || encounterAnimation) return;
         const h = 140,
           w = canvas.width - margin * 2;
         const y = canvas.height - h - margin;
@@ -235,7 +256,8 @@
       }
 
       function drawBattleMenu() {
-        if (!showBattleMenu || letterOverlayVisible) return;
+        if (!showBattleMenu || letterOverlayVisible || encounterAnimation)
+          return;
         const boxW = canvas.width - margin * 2;
         realCtx.fillStyle = colors.boxBg;
         realCtx.fillRect(margin, bY, boxW, bH);
@@ -285,7 +307,12 @@
             : mainMessages[currentMessageIndex];
         if (!msg) msg = "";
 
-        if (!letterOverlayVisible && visibleChars < msg.length && !isTyping) {
+        if (
+          !letterOverlayVisible &&
+          visibleChars < msg.length &&
+          !isTyping &&
+          !encounterAnimation
+        ) {
           isTyping = true;
           setTimeout(() => {
             visibleChars++;
@@ -310,7 +337,7 @@
 
         drawDialogueBox();
 
-        if (!showBattleMenu && !letterOverlayVisible) {
+        if (!showBattleMenu && !letterOverlayVisible && !encounterAnimation) {
           realCtx.font = "22px 'Fira Mono', monospace";
           realCtx.fillStyle = colors.text;
           realCtx.fillText(
@@ -333,37 +360,62 @@
           realCtx.fillText("▶", 775, 285);
         }
 
+        if (encounterAnimation) {
+          encounterTimer++;
+          if (encounterTimer < 40) {
+            if (Math.floor(encounterTimer / 5) % 2 === 0) {
+              realCtx.fillStyle = "white";
+              realCtx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+          } else if (encounterTimer < 80) {
+            realCtx.fillStyle = "black";
+            let shutterHeight = (encounterTimer - 40) * (canvas.height / 80);
+            realCtx.fillRect(0, 0, canvas.width, shutterHeight);
+            realCtx.fillRect(
+              0,
+              canvas.height - shutterHeight,
+              canvas.width,
+              shutterHeight,
+            );
+          } else {
+            encounterAnimation = false;
+            showBattleMenu = true;
+            waitingToStartBattle = false;
+            visibleChars = 0;
+          }
+        }
+
         drawBattleMenu();
         drawHPBar();
         requestAnimationFrame(gameLoop);
       }
 
-      function startAudio() {
+      function handleInput(e) {
         if (!audioStarted) {
-          bgMusic
-            .play()
-            .catch((e) => console.log("Waiting for interaction..."));
+          bgMusic.play().catch((err) => console.log("Audio waiting..."));
           audioStarted = true;
         }
-      }
-
-      function handleInput(e) {
-        // Unlocks audio on the very first click
-        startAudio();
 
         const rect = canvas.getBoundingClientRect();
         const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
         const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-        if (isTyping) {
-          visibleChars = 999;
+        if (isTyping || encounterAnimation) {
+          if (!encounterAnimation) visibleChars = 999;
           return;
         }
 
         if (battleMessageActive) {
+          playClick();
           if (battleMessageQueue[0] === "SNORLAX used rest.") targetHP = 100;
-          if (battleMessageQueue[0] === "SNORLAX wandered off!")
+          if (battleMessageQueue[0] === "SNORLAX wandered off!") {
             snorlaxExists = false;
+            battleMusic.pause();
+            battleMusic.currentTime = 0;
+            bgMusic.currentTime = 0;
+            bgMusic.play();
+            battleMusicStarted = false;
+          }
           if (battleMessageQueue[0] === "SNORLAX dropped a letter.")
             showingLetterSprite = true;
           if (battleMessageQueue[0] === "Rish opened the Monthsary Letter.") {
@@ -395,8 +447,10 @@
               mouseY >= bY &&
               mouseY <= bY + 70
             ) {
+              playClick();
               showMoveMenu = true;
             } else if (mouseX >= 800 && mouseY >= bY && mouseY <= bY + 70) {
+              playClick();
               showBagMenu = true;
             } else if (
               mouseX >= 615 &&
@@ -404,6 +458,7 @@
               mouseY >= bY + 70 &&
               mouseY <= bY + 140
             ) {
+              playClick();
               battleMessageQueue = ["You don't have any Pokémons!"];
               battleMessageActive = true;
               visibleChars = 0;
@@ -412,13 +467,18 @@
               mouseY >= bY + 70 &&
               mouseY <= bY + 140
             ) {
+              playClick();
               battleMessageQueue = ["SNORLAX blocked the path!"];
               battleMessageActive = true;
               visibleChars = 0;
             }
             return;
           }
+
           if (showMoveMenu && mouseX >= margin && mouseX <= margin + 250) {
+            hitSFX.currentTime = 0;
+            hitSFX.play().catch((e) => {});
+
             targetHP = Math.max(0, targetHP - 10);
             let selectedD =
               targetHP <= 10
@@ -435,7 +495,10 @@
             battleMessageActive = true;
             visibleChars = 0;
           }
+
           if (showBagMenu && mouseX >= margin && mouseX <= margin + 250) {
+            playClick();
+            forceSleepSprite = false;
             battleMessageQueue = [
               "Rish used the Sitrus Berry.",
               "SNORLAX's HP was restored!",
@@ -448,12 +511,14 @@
             battleMessageActive = true;
             visibleChars = 0;
           } else if (showBagMenu && mouseX >= 400) {
+            playClick();
             showBagMenu = false;
           }
           return;
         }
 
         if (showYesNo && !letterOverlayVisible) {
+          playClick();
           if (mouseY < 290) {
             showYesNo = false;
             isNoLoop = false;
@@ -473,20 +538,24 @@
           return;
         }
 
+        playClick();
+
         if (
           currentMessageIndex === mainMessages.length - 1 &&
           !waitingToStartBattle
         ) {
+          if (!battleMusicStarted) {
+            bgMusic.pause();
+            battleMusic.play().catch((e) => {});
+            battleMusicStarted = true;
+            encounterAnimation = true;
+            encounterTimer = 0;
+          }
           waitingToStartBattle = true;
           return;
         }
 
-        if (waitingToStartBattle) {
-          showBattleMenu = true;
-          waitingToStartBattle = false;
-          visibleChars = 0;
-          return;
-        }
+        if (waitingToStartBattle) return;
 
         if (currentMessageIndex < mainMessages.length - 1) {
           currentMessageIndex++;
