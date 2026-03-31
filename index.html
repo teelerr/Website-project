@@ -126,6 +126,11 @@
         hpGreen: "#40d040",
       };
 
+      // Audio Setup
+      const bgMusic = new Audio("Main.mp3");
+      bgMusic.loop = true;
+      let audioStarted = false;
+
       const mainMessages = [
         "A Pokémon is sprawled out in a deep and comfortable slumber.",
         "Want to use the POKé FLUTE?",
@@ -286,6 +291,10 @@
             visibleChars++;
             isTyping = false;
           }, typingSpeed);
+        } else if (!letterOverlayVisible && visibleChars >= msg.length) {
+          if ((currentMessageIndex === 1 || isNoLoop) && !interactionComplete) {
+            showYesNo = true;
+          }
         }
 
         realCtx.clearRect(0, 0, canvas.width, canvas.height);
@@ -329,10 +338,23 @@
         requestAnimationFrame(gameLoop);
       }
 
+      function startAudio() {
+        if (!audioStarted) {
+          bgMusic
+            .play()
+            .catch((e) => console.log("Waiting for interaction..."));
+          audioStarted = true;
+        }
+      }
+
       function handleInput(e) {
+        // Unlocks audio on the very first click
+        startAudio();
+
         const rect = canvas.getBoundingClientRect();
         const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
         const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
         if (isTyping) {
           visibleChars = 999;
           return;
@@ -372,10 +394,28 @@
               mouseX <= 750 &&
               mouseY >= bY &&
               mouseY <= bY + 70
-            )
+            ) {
               showMoveMenu = true;
-            if (mouseX >= 800 && mouseY >= bY && mouseY <= bY + 70)
+            } else if (mouseX >= 800 && mouseY >= bY && mouseY <= bY + 70) {
               showBagMenu = true;
+            } else if (
+              mouseX >= 615 &&
+              mouseX <= 800 &&
+              mouseY >= bY + 70 &&
+              mouseY <= bY + 140
+            ) {
+              battleMessageQueue = ["You don't have any Pokémons!"];
+              battleMessageActive = true;
+              visibleChars = 0;
+            } else if (
+              mouseX >= 800 &&
+              mouseY >= bY + 70 &&
+              mouseY <= bY + 140
+            ) {
+              battleMessageQueue = ["SNORLAX blocked the path!"];
+              battleMessageActive = true;
+              visibleChars = 0;
+            }
             return;
           }
           if (showMoveMenu && mouseX >= margin && mouseX <= margin + 250) {
