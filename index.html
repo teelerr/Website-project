@@ -132,11 +132,12 @@
       const hitSFX = new Audio("Hit.mp3");
       const clickSFX = new Audio("Click.mp3");
 
-      // Music stays at full volume (1.0)
+      // MUSIC & HIT SFX AT FULL VOLUME
       bgMusic.volume = 1.0;
       battleMusic.volume = 1.0;
-      // Clicks and Hits are now silent/subtle (0.15)
-      hitSFX.volume = 0.15;
+      hitSFX.volume = 1.0;
+
+      // CLICK SFX REMAINS SILENT/SUBTLE
       clickSFX.volume = 0.15;
 
       bgMusic.loop = true;
