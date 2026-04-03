@@ -82,6 +82,9 @@
         border: 8px double #d5c4a1;
         overflow-y: auto;
       }
+      #letterContent {
+        white-space: pre-wrap;
+      }
       @keyframes bob {
         0%,
         100% {
@@ -97,20 +100,7 @@
     <div id="gameContainer">
       <img id="characterSprite" src="character.jpg" alt="Snorlax" />
       <div id="letterOverlay">
-        <h2 style="text-align: center; margin-top: 0">The Monthsary Letter</h2>
-        <p>Dearest [Name],</p>
-        <p>
-          Just like this Snorlax, I can be a bit stubborn and sleepy sometimes,
-          but you always know exactly what I need to keep going.
-        </p>
-        <p>
-          Happy Anniversary! Thank you for always playing the flute to wake me
-          up and for having the right berries to make everything better. I'm so
-          lucky to have you as my Player 2.
-        </p>
-        <p style="text-align: right; margin-top: 40px">
-          Forever yours,<br />Rish
-        </p>
+        <div id="letterContent">Loading letter...</div>
       </div>
       <canvas id="rpgCanvas" width="960" height="540"></canvas>
     </div>
@@ -126,24 +116,31 @@
         hpGreen: "#40d040",
       };
 
-      // Audio Setup
       const bgMusic = new Audio("Main.mp3");
       const battleMusic = new Audio("Battle.mp3");
       const hitSFX = new Audio("Hit.mp3");
       const clickSFX = new Audio("Click.mp3");
 
-      // MUSIC & HIT SFX AT FULL VOLUME
       bgMusic.volume = 1.0;
       battleMusic.volume = 1.0;
       hitSFX.volume = 1.0;
-
-      // CLICK SFX REMAINS SILENT/SUBTLE
       clickSFX.volume = 0.15;
 
       bgMusic.loop = true;
       battleMusic.loop = true;
       let audioStarted = false;
       let battleMusicStarted = false;
+
+      fetch("Letter.txt")
+        .then((response) => response.text())
+        .then((data) => {
+          document.getElementById("letterContent").innerText = data;
+        })
+        .catch((err) => {
+          console.error("Could not load Letter.txt", err);
+          document.getElementById("letterContent").innerText =
+            "Dearest [Name],\n\n(Error loading Letter.txt)";
+        });
 
       const mainMessages = [
         "A Pokémon is sprawled out in a deep and comfortable slumber.",
@@ -363,14 +360,14 @@
 
         if (encounterAnimation) {
           encounterTimer++;
-          if (encounterTimer < 40) {
-            if (Math.floor(encounterTimer / 5) % 2 === 0) {
+          if (encounterTimer < 80) {
+            if (Math.floor(encounterTimer / 10) % 2 === 0) {
               realCtx.fillStyle = "white";
               realCtx.fillRect(0, 0, canvas.width, canvas.height);
             }
-          } else if (encounterTimer < 80) {
+          } else if (encounterTimer < 160) {
             realCtx.fillStyle = "black";
-            let shutterHeight = (encounterTimer - 40) * (canvas.height / 80);
+            let shutterHeight = (encounterTimer - 80) * (canvas.height / 160);
             realCtx.fillRect(0, 0, canvas.width, shutterHeight);
             realCtx.fillRect(
               0,
